@@ -1,0 +1,12 @@
+# 1. Create and activate the venv
+python -m venv /uhome/hoda2/projects/p60290_1/envs/segvol_transformers
+source /uhome/hoda2/projects/p60290_1/envs/segvol_transformers/bin/activate
+
+# 2. Install all dependencies
+pip install torch torchvision
+pip install monai==0.9.0
+pip install einops==0.6.1 nibabel tqdm scipy scikit-image
+pip install tokenizers==0.13.3
+pip install transformers==4.18.0 --no-deps
+pip install huggingface-hub sacremoses regex filelock pyyaml packaging requests
+pip install modelscope

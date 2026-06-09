@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH --job-name=SegVol_IBD_Raos
+#SBATCH --partition=gpu-h200
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=512G
+#SBATCH --time=48:00:00
+#SBATCH --output=logs/test_ibd_raos_%j.out
+#SBATCH --error=logs/test_ibd_raos_%j.err
+
+source /uhome/hoda2/projects/p60290_1/envs/segvol_transformers/bin/activate
+python segvol_test/test_ibd_raos.py

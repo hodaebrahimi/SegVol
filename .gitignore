@@ -1,0 +1,15 @@
+# Model checkpoints (too large for GitHub's 100 MB file limit)
+*.pth
+
+# Logs
+logs/
+
+# Prediction / inference outputs (large .nii.gz volumes)
+segvol_test/IBD_Predict/
+segvol_test/IBD_CTEs_Predict/
+segvol_test/Atlas_Intestinal_Predict/
+raos_tr_segvol/*/
+
+# Python
+__pycache__/
+*.pyc
