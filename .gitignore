@@ -1,14 +1,22 @@
 # Model checkpoints (too large for GitHub's 100 MB file limit)
 *.pth
+*.csv 
+*.nii.gz
 
 # Logs
 logs/
 
 # Prediction / inference outputs (large .nii.gz volumes)
-segvol_test/IBD_Predict/
-segvol_test/IBD_CTEs_Predict/
-segvol_test/Atlas_Intestinal_Predict/
-raos_tr_segvol/*/
+/segvol_test/IBD_Predict/
+/segvol_test/IBD_CTEs_Predict/
+/segvol_test/Atlas_Intestinal_Predict/
+/raos_tr_segvol/
+/raos_val_segvol/
+/raos_ts_segvol/
+
+
+# QA visual spot-check sheets (~1 MB per PNG); the small qa_cte_segvol.csv is kept
+segvol_test/qa_cte_montages/
 
 # Python
 __pycache__/

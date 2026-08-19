@@ -1,4 +1,5 @@
 import os
+import argparse
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoModel, AutoTokenizer
 import torch
@@ -12,13 +13,23 @@ join = os.path.join
 ####################################################################################
 
 ### SET PARAMS HERE ###
-imagesTr_root  = '/uhome/hoda2/projects/p60290_1/RAOS/RAOS-Real/CancerImages(Set1)/imagesTr'
-# cases_list     = './raos_tr_segvol/test_10cases.txt'   # 10-case subset (disabled: running whole Tr set)
-save_data_root = './raos_tr_segvol'
-ckpt_path      = './segvol_test/SegVol_atlas11.pth'
+RAOS_ROOT = '/uhome/hoda2/projects/p60290_1/RAOS/RAOS-Real/CancerImages(Set1)'
+SPLITS = {
+    'val':  {'images': 'imagesVal', 'save': './raos_val_segvol'},
+    'test': {'images': 'imagesTs',  'save': './raos_ts_segvol'},
+}
+ckpt_path = './segvol_test/SegVol_atlas11.pth'
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--split', required=True, choices=list(SPLITS.keys()))
+parser.add_argument('--gpu', type=int, default=0)
+cfg = parser.parse_args()
+
+images_root    = join(RAOS_ROOT, SPLITS[cfg.split]['images'])
+save_data_root = SPLITS[cfg.split]['save']
 
 # set device
-gpu = 0
+gpu = cfg.gpu
 torch.cuda.set_device(gpu)
 
 ####################################################################################
@@ -33,16 +44,21 @@ category_reflect = {
     "duodenum":  "duodenum",
 }
 
-# Load the list of case UIDs to process
-# # 10-case subset (disabled: running whole Tr set)
-# with open(cases_list) as f:
-#     cases_names = [ln.strip() for ln in f if ln.strip()]
 
-# Build the list from every CT in imagesTr (whole RAOS-Tr set)
-cases_names = sorted(
-    fn[:-len('.nii.gz')] for fn in os.listdir(imagesTr_root) if fn.endswith('.nii.gz')
+def clean_id(fname):
+    """Strip extension and any trailing nnU-Net channel suffix (_0000) so the
+    case id matches the ground-truth label filename."""
+    stem = fname[:-len('.nii.gz')]
+    if stem.endswith('_0000'):
+        stem = stem[:-len('_0000')]
+    return stem
+
+
+# Build the list of (image_filename, clean_case_id) from every CT in the split
+cases = sorted(
+    (fn, clean_id(fn)) for fn in os.listdir(images_root) if fn.endswith('.nii.gz')
 )
-print(f'Detected {len(cases_names)} RAOS-Tr cases.')
+print(f'Detected {len(cases)} RAOS-{cfg.split} cases.')
 
 
 class DimTranspose(transforms.Transform):
@@ -67,8 +83,8 @@ class MinMaxNormalization(transforms.Transform):
 
 class RAOSDataset(Dataset):
     def __init__(self):
-        self.images_root = imagesTr_root
-        self.data        = cases_names
+        self.images_root = images_root
+        self.data        = cases
         self.img_loader  = transforms.LoadImage()
         self.transform4test = transforms.Compose([
             DimTranspose(keys=["image"]),
@@ -84,12 +100,12 @@ class RAOSDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        case_name  = self.data[idx]
-        image_path = join(self.images_root, f'{case_name}.nii.gz')
+        img_fname, case_id = self.data[idx]
+        image_path = join(self.images_root, img_fname)
 
         ct_npy    = self.preprocess_ct(image_path)
         data_item = self.zoom_transform(ct_npy)
-        data_item['case_num']   = case_name
+        data_item['case_num']   = case_id
         data_item['image_path'] = image_path
         return data_item
 

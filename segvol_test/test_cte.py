@@ -1,4 +1,6 @@
 import os
+import re
+import argparse
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoModel, AutoTokenizer
 import torch
@@ -12,20 +14,25 @@ join = os.path.join
 ####################################################################################
 
 ### SET PARAMS HERE ###
-imagesTr_root  = '/uhome/hoda2/projects/p60290_1/RAOS/RAOS-Real/CancerImages(Set1)/imagesTr'
-# cases_list     = './raos_tr_segvol/test_10cases.txt'   # 10-case subset (disabled: running whole Tr set)
-save_data_root = './raos_tr_segvol'
+images_root    = '/uhome/hoda2/rdss/p60290_1/IBD_Data/CTEs_cd_overlap'
+save_data_root = './cte_segvol'
 ckpt_path      = './segvol_test/SegVol_atlas11.pth'
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--gpu', type=int, default=0)
+parser.add_argument('--limit', type=int, default=None,
+                    help='Only process the first N cases (smoke test)')
+cfg = parser.parse_args()
+
 # set device
-gpu = 0
+gpu = cfg.gpu
 torch.cuda.set_device(gpu)
 
 ####################################################################################
 
 os.makedirs(save_data_root, exist_ok=True)
 
-# Segment these three classes separately.
+# Segment these three classes separately (same as the RAOS runs).
 # Key   = SegVol text prompt; Value = output filename stem.
 category_reflect = {
     "colon":     "colon",
@@ -33,16 +40,17 @@ category_reflect = {
     "duodenum":  "duodenum",
 }
 
-# Load the list of case UIDs to process
-# # 10-case subset (disabled: running whole Tr set)
-# with open(cases_list) as f:
-#     cases_names = [ln.strip() for ln in f if ln.strip()]
+# Only the CTE volumes; the directory also holds a sidecar .json per scan.
+IMAGE_PATTERN = re.compile(r'^CTE_CD_OVERLAP_(\d+)\.nii\.gz$')
 
-# Build the list from every CT in imagesTr (whole RAOS-Tr set)
-cases_names = sorted(
-    fn[:-len('.nii.gz')] for fn in os.listdir(imagesTr_root) if fn.endswith('.nii.gz')
+# Build the list of (image_filename, case_id) from every CTE in the directory
+cases = sorted(
+    (fn, fn[:-len('.nii.gz')])
+    for fn in os.listdir(images_root) if IMAGE_PATTERN.match(fn)
 )
-print(f'Detected {len(cases_names)} RAOS-Tr cases.')
+if cfg.limit:
+    cases = cases[:cfg.limit]
+print(f'Detected {len(cases)} CTE cases.')
 
 
 class DimTranspose(transforms.Transform):
@@ -65,10 +73,10 @@ class MinMaxNormalization(transforms.Transform):
         return d
 
 
-class RAOSDataset(Dataset):
+class CTEDataset(Dataset):
     def __init__(self):
-        self.images_root = imagesTr_root
-        self.data        = cases_names
+        self.images_root = images_root
+        self.data        = cases
         self.img_loader  = transforms.LoadImage()
         self.transform4test = transforms.Compose([
             DimTranspose(keys=["image"]),
@@ -84,12 +92,12 @@ class RAOSDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        case_name  = self.data[idx]
-        image_path = join(self.images_root, f'{case_name}.nii.gz')
+        img_fname, case_id = self.data[idx]
+        image_path = join(self.images_root, img_fname)
 
         ct_npy    = self.preprocess_ct(image_path)
         data_item = self.zoom_transform(ct_npy)
-        data_item['case_num']   = case_name
+        data_item['case_num']   = case_id
         data_item['image_path'] = image_path
         return data_item
 
@@ -157,7 +165,7 @@ model.load_state_dict(model_dict['model_state_dict'])
 print('Model loaded.')
 
 model = torch.nn.DataParallel(model, device_ids=[gpu])
-dataset = RAOSDataset()
+dataset = CTEDataset()
 test_loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=1)
 
 ####################################################################################
